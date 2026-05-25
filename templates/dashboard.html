@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AI Fitness Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        .chat-widget {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1050;
+            font-family: Arial, sans-serif;
+        }
+
+        .chat-toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 18px;
+            border-radius: 999px;
+            border: none;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 12px 26px rgba(102, 126, 234, 0.35);
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .chat-toggle-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 16px 28px rgba(102, 126, 234, 0.4);
+        }
+
+        .chat-panel-float {
+            width: 360px;
+            max-height: 540px;
+            background: #ffffff;
+            border-radius: 28px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+            overflow: hidden;
+            transform: translateY(12px);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            margin-top: 16px;
+        }
+
+        .chat-widget.open .chat-panel-float {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .chat-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 16px 18px;
+        }
+
+        .chat-panel-header h5 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .chat-close-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .chat-panel-body {
+            height: 320px;
+            overflow-y: auto;
+            padding: 16px;
+            background: #f7f9ff;
+        }
+
+        .chat-message {
+            margin-bottom: 14px;
+            display: flex;
+        }
+
+        .chat-message.bot {
+            justify-content: flex-start;
+        }
+
+        .chat-message.user {
+            justify-content: flex-end;
+        }
+
+        .chat-message .bubble {
+            max-width: 78%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            line-height: 1.5;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+        }
+
+        .chat-message.bot .bubble {
+            background: #eef3ff;
+            color: #1f2d5c;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-message.user .bubble {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-panel-footer {
+            padding: 14px 16px 18px;
+            display: flex;
+            gap: 10px;
+            background: white;
+            border-top: 1px solid #e8ebf1;
+        }
+
+        .chat-panel-footer input {
+            flex: 1;
+            border: 1px solid #d7dce6;
+            border-radius: 999px;
+            padding: 12px 16px;
+        }
+
+        .chat-panel-footer button {
+            border-radius: 999px;
+            padding: 12px 18px;
+            background: #667eea;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* Voice Assistant Styles */
+        .voice-assistant {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            z-index: 1040;
+            font-family: Arial, sans-serif;
+        }
+
+        .voice-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 12px 26px rgba(102, 126, 234, 0.35);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            font-size: 24px;
+        }
+
+        .voice-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 16px 28px rgba(102, 126, 234, 0.45);
+        }
+
+        .voice-btn.listening {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+            }
+
+            50% {
+                box-shadow: 0 0 0 10px rgba(255, 107, 107, 0.4);
+            }
+        }
+
+        .voice-tooltip {
+            position: absolute;
+            bottom: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            white-space: nowrap;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .voice-btn:hover~.voice-tooltip {
+            opacity: 1;
+        }
+
+        .voice-panel {
+            position: fixed;
+            bottom: 100px;
+            left: 24px;
+            width: 300px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+            padding: 16px;
+            display: none;
+            z-index: 1040;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .voice-panel.active {
+            display: block;
+        }
+
+        .voice-panel-header {
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .voice-panel-content {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+            min-height: 30px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .voice-panel-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .voice-panel-controls button {
+            flex: 1;
+            min-width: 70px;
+            padding: 8px 12px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .voice-panel-controls button:hover {
+            background: #f5f5f5;
+            border-color: #667eea;
+        }
+
+        .voice-panel-controls button.primary {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .voice-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-right: 6px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrapper">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h3 class="brand-title mb-4">💪 Fitness</h3>
+            </div>
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-chart-line"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('workout') }}">
+                        <i class="fas fa-dumbbell"></i> Workouts
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('diet') }}">
+                        <i class="fas fa-apple-alt"></i> Diet Plan
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('tracker') }}">
+                        <i class="fas fa-edit"></i> Tracker
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('profile') }}">
+                        <i class="fas fa-user"></i> Profile
+                    </a>
+                </li>
+                <li class="nav-item mt-5">
+                    <a class="nav-link text-danger" href="{{ url_for('logout') }}">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 id="greeting">Welcome back!</h2>
+                    <div class="user-menu">
+                        <button class="btn btn-sm btn-light" onclick="location.href='/profile'">
+                            <i class="fas fa-user-circle"></i> {{ name }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <!-- BMI and Stats Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="row mb-4">
+                            <div class="col-md-12">
+                                <div class="chart-card">
+                                    <h5 class="mb-3">AI Insights</h5>
+                                    <div id="aiInsights" class="insights-list">
+                                        <p class="text-muted">Loading your personalized insights...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon bmi-icon">
+                                <i class="fas fa-weight"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h6 class="text-muted">BMI</h6>
+                                <h3 id="bmiValue">--</h3>
+                                <small id="bmiCategory" class="text-muted">--</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-icon weight-icon">
+                                <i class="fas fa-balance-scale"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h6 class="text-muted">Weight</h6>
+                                <h3 id="weightValue">--</h3>
+                                <small class="text-muted">kg</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-icon calories-icon">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h6 class="text-muted">Calories Burned</h6>
+                                <h3 id="caloriesValue">--</h3>
+                                <small class="text-muted">kcal/month</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-icon workout-icon">
+                                <i class="fas fa-heartbeat"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h6 class="text-muted">Workouts</h6>
+                                <h3 id="workoutsValue">--</h3>
+                                <small class="text-muted">this month</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <h5 class="mb-3">Weight Progress</h5>
+                            <img id="weightChart" src="" class="img-fluid" style="display:none;">
+                            <p id="noWeightChart" class="text-muted">No data available</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="chart-card">
+                            <h5 class="mb-3">Daily Calories</h5>
+                            <img id="calorieChart" src="" class="img-fluid" style="display:none;">
+                            <p id="noCalorieChart" class="text-muted">No data available</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Workouts -->
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="chart-card">
+                            <h5 class="mb-3">Recent Workouts</h5>
+                            <div id="recentWorkouts">
+                                <p class="text-muted">No workouts yet. Start tracking your fitness!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="row mt-4">
+                    <div class="col-md-12">
+                        <div class="quick-actions">
+                            <h5 class="mb-3">Quick Actions</h5>
+                            <div class="action-buttons">
+                                <button class="btn btn-gradient" onclick="location.href='/workout'">
+                                    <i class="fas fa-dumbbell"></i> Get Workout
+                                </button>
+                                <button class="btn btn-gradient" onclick="location.href='/diet'">
+                                    <i class="fas fa-apple-alt"></i> Get Diet Plan
+                                </button>
+                                <button class="btn btn-gradient" onclick="location.href='/tracker'">
+                                    <i class="fas fa-edit"></i> Track Today
+                                </button>
+                                <button class="btn btn-gradient" onclick="location.href='/chat'">
+                                    <i class="fas fa-comments"></i> Chat AI Coach
+                                </button>
+                                <button class="btn btn-gradient" onclick="getMotivationalQuote()">
+                                    <i class="fas fa-quote-left"></i> Get Inspired
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-widget" id="chatWidget">
+        <button class="chat-toggle-btn" id="chatToggle" type="button">
+            <i class="fas fa-comments"></i>
+            <span>AI Coach</span>
+        </button>
+        <div class="chat-panel-float" id="chatPanel" role="dialog" aria-label="AI fitness chat panel">
+            <div class="chat-panel-header">
+                <h5>AI fitness coach</h5>
+                <button type="button" class="chat-close-btn" id="chatClose" aria-label="Close chat">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="chat-panel-body" id="chatPanelBody">
+                <div class="chat-message bot">
+                    <div class="bubble">Hi! I am your AI fitness coach. Ask me anything about your physique, diet,
+                        workouts, or transformation.</div>
+                </div>
+            </div>
+            <div class="chat-panel-footer">
+                <input type="text" id="widgetChatInput" placeholder="Ask your AI coach..." autocomplete="off">
+                <button type="button" id="widgetSend">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Voice Assistant Panel -->
+    <div class="voice-assistant" id="voiceAssistant">
+        <button class="voice-btn" id="voiceBtn" title="Click to speak" onclick="toggleVoicePanel()">
+            <i class="fas fa-microphone"></i>
+        </button>
+        <div class="voice-tooltip">Voice Assistant</div>
+
+        <div class="voice-panel" id="voicePanel">
+            <div class="voice-panel-header">
+                🎤 Voice Assistant
+            </div>
+            <div class="voice-panel-content" id="voicePanelContent">
+                <span class="voice-indicator"></span> <span id="voiceStatus">Ready to listen</span>
+            </div>
+            <div class="voice-panel-controls">
+                <button class="primary" id="listenBtn" onclick="startListening()">
+                    <i class="fas fa-microphone"></i> Listen
+                </button>
+                <button id="speakBtn" onclick="speakQuote()">
+                    <i class="fas fa-volume-up"></i> Quote
+                </button>
+                <button id="closeVoiceBtn" onclick="toggleVoicePanel()">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/dashboard-data');
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update stats
+                    document.getElementById('bmiValue').textContent = data.bmi.bmi;
+                    document.getElementById('bmiCategory').textContent = data.bmi.category;
+                    document.getElementById('weightValue').textContent = data.user.weight;
+                    document.getElementById('caloriesValue').textContent = data.summary.total_calories_burned;
+                    document.getElementById('workoutsValue').textContent = data.summary.total_workouts;
+
+                    // Update charts
+                    if (data.charts.weight) {
+                        document.getElementById('weightChart').src = 'data:image/png;base64,' + data.charts.weight;
+                        document.getElementById('weightChart').style.display = 'block';
+                        document.getElementById('noWeightChart').style.display = 'none';
+                    }
+
+                    if (data.charts.calorie) {
+                        document.getElementById('calorieChart').src = 'data:image/png;base64,' + data.charts.calorie;
+                        document.getElementById('calorieChart').style.display = 'block';
+                        document.getElementById('noCalorieChart').style.display = 'none';
+                    }
+
+                    // Update recent workouts
+                    if (data.recent_workouts.length > 0) {
+                        let html = '<table class="table table-hover">';
+                        html += '<thead><tr><th>Date</th><th>Workout</th><th>Duration</th><th>Calories</th></tr></thead><tbody>';
+                        data.recent_workouts.forEach(w => {
+                            const date = new Date(w.date).toLocaleDateString();
+                            html += `<tr><td>${date}</td><td>${w.name}</td><td>${w.duration} min</td><td>${w.calories_burned} kcal</td></tr>`;
+                        });
+                        html += '</tbody></table>';
+                        document.getElementById('recentWorkouts').innerHTML = html;
+                    }
+
+                    // Update greeting
+                    const hour = new Date().getHours();
+                    let greetingText = 'Welcome back';
+                    if (hour < 12) greetingText = 'Good Morning';
+                    else if (hour < 18) greetingText = 'Good Afternoon';
+                    else greetingText = 'Good Evening';
+                    document.getElementById('greeting').textContent = greetingText + ', ' + data.user.name + '!';
+
+                    try {
+                        const insightsResponse = await fetch('/api/ai-insights');
+                        const insightsData = await insightsResponse.json();
+                        const insightsElement = document.getElementById('aiInsights');
+                        if (insightsData.success && insightsData.insights.length > 0) {
+                            let insightHtml = '<div class="insights-items">';
+                            insightsData.insights.forEach(insight => {
+                                insightHtml += `
+                                    <div class="insight-item mb-3">
+                                        <h6>${insight.title}</h6>
+                                        <p>${insight.message}</p>
+                                    </div>
+                                `;
+                            });
+                            insightHtml += '</div>';
+                            insightsElement.innerHTML = insightHtml;
+                        } else {
+                            insightsElement.innerHTML = '<p class="text-muted">No AI insights available yet. Start logging your workouts and meals.</p>';
+                        }
+                    } catch (insightError) {
+                        console.error('Error loading AI insights:', insightError);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        async function getMotivationalQuote() {
+            try {
+                const response = await fetch('/api/quote');
+                const data = await response.json();
+                if (data.success) {
+                    alert('💡 ' + data.quote);
+                }
+            } catch (error) {
+                console.error('Error fetching quote:', error);
+            }
+        }
+
+        // Load dashboard on page load
+        loadDashboard();
+
+        // Reload every 30 seconds
+        setInterval(loadDashboard, 30000);
+
+        const chatWidget = document.getElementById('chatWidget');
+        const chatToggle = document.getElementById('chatToggle');
+        const chatClose = document.getElementById('chatClose');
+        const chatPanelBody = document.getElementById('chatPanelBody');
+        const widgetChatInput = document.getElementById('widgetChatInput');
+        const widgetSend = document.getElementById('widgetSend');
+        const socket = io();
+
+        const appendChatMessage = (sender, text) => {
+            const wrapper = document.createElement('div');
+            wrapper.className = `chat-message ${sender}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.textContent = text;
+            wrapper.appendChild(bubble);
+            chatPanelBody.appendChild(wrapper);
+            chatPanelBody.scrollTop = chatPanelBody.scrollHeight;
+        };
+
+        socket.on('connect', () => {
+            appendChatMessage('bot', 'Connected to your AI coach. Ask away!');
+        });
+
+        socket.on('disconnect', () => {
+            appendChatMessage('bot', 'Chat disconnected. Refresh the page to reconnect.');
+        });
+
+        socket.on('chat_response', (data) => {
+            appendChatMessage('bot', data.message);
+        });
+
+        const sendWidgetMessage = () => {
+            const message = widgetChatInput.value.trim();
+            if (!message) return;
+            appendChatMessage('user', message);
+            socket.emit('user_message', { message });
+            widgetChatInput.value = '';
+        };
+
+        chatToggle.addEventListener('click', () => {
+            chatWidget.classList.toggle('open');
+            widgetChatInput.focus();
+        });
+
+        chatClose.addEventListener('click', () => {
+            chatWidget.classList.remove('open');
+        });
+
+        widgetSend.addEventListener('click', sendWidgetMessage);
+        widgetChatInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                sendWidgetMessage();
+            }
+        });
+
+        // ==================== VOICE ASSISTANT FUNCTIONS ====================
+
+        let isListening = false;
+
+        function toggleVoicePanel() {
+            const panel = document.getElementById('voicePanel');
+            panel.classList.toggle('active');
+        }
+
+        function updateVoiceStatus(message) {
+            document.getElementById('voiceStatus').textContent = message;
+        }
+
+        async function startListening() {
+            if (isListening) return;
+            isListening = true;
+
+            const voiceBtn = document.getElementById('voiceBtn');
+            const listenBtn = document.getElementById('listenBtn');
+            voiceBtn.classList.add('listening');
+            listenBtn.disabled = true;
+            updateVoiceStatus('Listening...');
+
+            try {
+                // Call backend to listen
+                const response = await fetch('/api/voice/listen');
+                const data = await response.json();
+
+                if (data.success) {
+                    updateVoiceStatus('Processing: ' + data.text);
+
+                    // Process the command
+                    if (data.command && data.command.success) {
+                        const intent = data.command.intent;
+                        updateVoiceStatus(`Executing: ${intent}`);
+
+                        // Navigate based on intent
+                        switch (intent) {
+                            case 'dashboard':
+                                location.href = '/dashboard';
+                                break;
+                            case 'workout':
+                                location.href = '/workout';
+                                break;
+                            case 'diet':
+                                location.href = '/diet';
+                                break;
+                            case 'tracker':
+                                location.href = '/tracker';
+                                break;
+                            case 'profile':
+                                location.href = '/profile';
+                                break;
+                            case 'quote':
+                                speakQuote();
+                                break;
+                            case 'logout':
+                                location.href = '/logout';
+                                break;
+                            default:
+                                updateVoiceStatus('Command understood: ' + intent);
+                        }
+                    } else {
+                        updateVoiceStatus('Command not recognized');
+                    }
+                } else {
+                    updateVoiceStatus('Could not understand audio');
+                }
+            } catch (error) {
+                console.error('Voice error:', error);
+                updateVoiceStatus('Error: ' + error.message);
+            } finally {
+                isListening = false;
+                voiceBtn.classList.remove('listening');
+                listenBtn.disabled = false;
+            }
+        }
+
+        async function speakQuote() {
+            updateVoiceStatus('Getting quote...');
+            try {
+                const response = await fetch('/api/voice/quote');
+                const data = await response.json();
+
+                if (data.success) {
+                    updateVoiceStatus('Speaking: "' + data.quote.substring(0, 30) + '..."');
+
+                    // Call backend to speak
+                    await fetch('/api/voice/speak', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            text: data.quote
+                        })
+                    });
+
+                    updateVoiceStatus('Quote: ' + data.quote);
+                } else {
+                    updateVoiceStatus('Failed to get quote');
+                }
+            } catch (error) {
+                console.error('Quote error:', error);
+                updateVoiceStatus('Error getting quote');
+            }
+        }
+
+        // Initialize voice panel on page load
+        document.addEventListener('DOMContentLoaded', function () {
+            // Add voice button to quick actions
+            const actionButtons = document.querySelector('.action-buttons');
+            if (actionButtons) {
+                const voiceActionBtn = document.createElement('button');
+                voiceActionBtn.className = 'btn btn-gradient';
+                voiceActionBtn.innerHTML = '<i class="fas fa-microphone"></i> Voice Command';
+                voiceActionBtn.onclick = function () {
+                    document.getElementById('voicePanel').classList.add('active');
+                    startListening();
+                };
+                actionButtons.appendChild(voiceActionBtn);
+            }
+        });
+    </script>
+</body>
+
+</html>
